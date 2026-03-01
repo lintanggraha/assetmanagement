@@ -75,12 +75,7 @@
 
           <footer class="content-footer footer bg-footer-theme">
             <div class="container-xxl">
-              <div class="footer-container d-flex align-items-center justify-content-between py-4 flex-md-row flex-column">
-                <div class="mb-2 mb-md-0">
-                  Copyleft &copy; 2021 - {{ date('Y') }} |
-                  <a href="{{ url('/dashboard') }}" class="footer-link">Lintang Graha Prasetyo</a>.
-                  Digital Enterprise Support Department.
-                </div>
+              <div class="footer-container d-flex align-items-center justify-content-end py-4 flex-md-row flex-column">
                 <div class="d-none d-md-inline-block">
                   <span class="footer-link">Version 1.0.1</span>
                 </div>
