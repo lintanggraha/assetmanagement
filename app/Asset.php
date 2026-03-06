@@ -12,6 +12,8 @@ class Asset extends Model
         'asset_code',
         'name',
         'asset_type',
+        'host_type',
+        'server_role',
         'environment',
         'criticality',
         'status',
@@ -21,6 +23,9 @@ class Asset extends Model
         'bank_id',
         'ip_address',
         'hostname',
+        'operating_system',
+        'os_version',
+        'os_eol_date',
         'port',
         'source',
         'discovery_confidence',
@@ -28,11 +33,14 @@ class Asset extends Model
         'tags',
         'last_seen_at',
         'notes',
+        'asset_profile',
         'user_id',
     ];
 
     protected $casts = [
         'last_seen_at' => 'datetime',
+        'os_eol_date' => 'date',
+        'asset_profile' => 'array',
     ];
 
     public function bank()
@@ -63,5 +71,10 @@ class Asset extends Model
     public function policyViolations()
     {
         return $this->hasMany('App\AssetPolicyViolation', 'asset_id');
+    }
+
+    public function services()
+    {
+        return $this->hasMany('App\AssetService', 'asset_id')->orderBy('is_primary', 'desc')->orderBy('service_name');
     }
 }

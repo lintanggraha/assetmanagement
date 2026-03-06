@@ -101,7 +101,8 @@ class User extends Authenticatable
     }
 
     public function canRunDiscovery(){
-        return $this->hasRole(['superadmin', 'admin', 'operator']);
+        return filter_var(env('ASSET_DISCOVERY_ENABLED', true), FILTER_VALIDATE_BOOLEAN)
+            && $this->hasRole(['superadmin', 'admin', 'operator']);
     }
 
     public function canManageAssetRecords(){

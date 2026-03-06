@@ -10,6 +10,18 @@ use Illuminate\Http\Request;
 
 class DiscoveryController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            if (!filter_var(env('ASSET_DISCOVERY_ENABLED', true), FILTER_VALIDATE_BOOLEAN)) {
+                return redirect()->route('dashboard')
+                    ->with('error', 'Discovery Center sementara di-hide. Gunakan input manual dari Asset Inventory.');
+            }
+
+            return $next($request);
+        });
+    }
+
     /**
      * Discovery center page.
      *
@@ -109,4 +121,3 @@ class DiscoveryController extends Controller
         return $query;
     }
 }
-

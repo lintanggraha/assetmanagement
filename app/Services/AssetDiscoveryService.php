@@ -130,17 +130,22 @@ class AssetDiscoveryService
             $candidate = $this->buildCandidate([
                 'name' => $app->nama,
                 'asset_type' => 'application',
+                'host_type' => null,
+                'server_role' => null,
                 'environment' => 'production',
                 'criticality' => 'high',
                 'status' => 'active',
                 'lifecycle_stage' => 'operational',
                 'ip_address' => $app->ip,
                 'hostname' => null,
+                'operating_system' => null,
+                'os_version' => null,
+                'os_eol_date' => null,
                 'port' => $app->port,
                 'bank_id' => $app->bank_id,
                 'owner_name' => null,
                 'owner_email' => null,
-                'source' => 'catalog_sync',
+                'source' => 'import',
                 'confidence' => 92,
                 'notes' => 'Auto-synced from legacy aplikasi catalog',
             ]);
@@ -154,18 +159,23 @@ class AssetDiscoveryService
         foreach ($databases as $database) {
             $candidate = $this->buildCandidate([
                 'name' => $database->nama,
-                'asset_type' => 'database',
+                'asset_type' => 'database_server',
+                'host_type' => null,
+                'server_role' => 'database_server',
                 'environment' => 'production',
                 'criticality' => 'high',
                 'status' => 'active',
                 'lifecycle_stage' => 'operational',
                 'ip_address' => $database->ip,
                 'hostname' => null,
+                'operating_system' => null,
+                'os_version' => null,
+                'os_eol_date' => null,
                 'port' => $database->port,
                 'bank_id' => $database->bank_id,
                 'owner_name' => null,
                 'owner_email' => null,
-                'source' => 'catalog_sync',
+                'source' => 'import',
                 'confidence' => 95,
                 'notes' => $database->deskripsi ?: 'Auto-synced from legacy database catalog',
             ]);
@@ -200,18 +210,22 @@ class AssetDiscoveryService
 
             $candidate = $this->buildCandidate([
                 'name' => $parts[0] ?? null,
-                'asset_type' => $parts[1] ?? 'other',
+                'asset_type' => $parts[1] ?? 'etc',
                 'ip_address' => $parts[2] ?? null,
                 'port' => $parts[3] ?? null,
                 'hostname' => $parts[4] ?? null,
                 'environment' => $parts[5] ?? 'production',
-                'criticality' => $parts[6] ?? 'medium',
                 'owner_email' => $parts[7] ?? null,
                 'owner_name' => $parts[8] ?? null,
                 'bank_id' => $parts[9] ?? null,
+                'host_type' => $parts[10] ?? null,
+                'server_role' => $parts[11] ?? null,
+                'operating_system' => $parts[12] ?? null,
+                'os_version' => $parts[13] ?? null,
+                'os_eol_date' => $parts[14] ?? null,
                 'status' => 'active',
                 'lifecycle_stage' => 'operational',
-                'source' => 'manual_seed',
+                'source' => 'import',
                 'confidence' => 78,
                 'notes' => 'Ingested from manual discovery payload',
             ]);
@@ -244,6 +258,8 @@ class AssetDiscoveryService
                 'asset_code' => $this->createAssetCode(),
                 'name' => $candidate['name'],
                 'asset_type' => $candidate['asset_type'],
+                'host_type' => $candidate['host_type'],
+                'server_role' => $candidate['server_role'],
                 'environment' => $candidate['environment'],
                 'criticality' => $candidate['criticality'],
                 'status' => $candidate['status'],
@@ -253,6 +269,9 @@ class AssetDiscoveryService
                 'bank_id' => $candidate['bank_id'],
                 'ip_address' => $candidate['ip_address'],
                 'hostname' => $candidate['hostname'],
+                'operating_system' => $candidate['operating_system'],
+                'os_version' => $candidate['os_version'],
+                'os_eol_date' => $candidate['os_eol_date'],
                 'port' => $candidate['port'],
                 'source' => $candidate['source'],
                 'discovery_confidence' => $candidate['confidence'],
@@ -277,13 +296,17 @@ class AssetDiscoveryService
             ]);
         } else {
             $updatableFields = [
+                'host_type',
+                'server_role',
                 'environment',
-                'criticality',
                 'status',
                 'lifecycle_stage',
                 'bank_id',
                 'ip_address',
                 'hostname',
+                'operating_system',
+                'os_version',
+                'os_eol_date',
                 'port',
             ];
 
@@ -319,6 +342,12 @@ class AssetDiscoveryService
             }
 
             $asset->last_seen_at = now()->toDateTimeString();
+            $asset->criticality = $this->deriveCriticalityFromEol(
+                $asset->asset_type,
+                $asset->os_eol_date,
+                is_array($asset->asset_profile) ? $asset->asset_profile : [],
+                'medium'
+            );
             $asset->risk_score = $this->calculateRiskScore(
                 $asset->criticality,
                 $asset->status,
@@ -423,22 +452,31 @@ class AssetDiscoveryService
             return null;
         }
 
-        $assetType = $this->enumValue(
-            $raw['asset_type'] ?? 'other',
-            ['application', 'database', 'server', 'network', 'storage', 'endpoint', 'other'],
+        $assetType = $this->normalizeAssetType($raw['asset_type'] ?? 'etc');
+
+        $hostType = $this->nullableEnumValue(
+            $raw['host_type'] ?? null,
+            ['physical', 'virtual_machine', 'container', 'cloud_instance', 'other'],
             'other'
         );
+
+        $serverRole = $this->nullableEnumValue(
+            $raw['server_role'] ?? null,
+            ['application_server', 'database_server'],
+            $assetType === 'database_server' ? 'database_server' : 'application_server'
+        );
+        if ($assetType === 'database_server' && !$serverRole) {
+            $serverRole = 'database_server';
+        } elseif ($assetType === 'application_server' && !$serverRole) {
+            $serverRole = 'application_server';
+        } elseif (!in_array($assetType, ['application_server', 'database_server'], true)) {
+            $serverRole = null;
+        }
 
         $environment = $this->enumValue(
             $raw['environment'] ?? 'production',
             ['production', 'staging', 'development', 'uat', 'dr', 'other'],
             'production'
-        );
-
-        $criticality = $this->enumValue(
-            $raw['criticality'] ?? 'medium',
-            ['low', 'medium', 'high', 'critical'],
-            'medium'
         );
 
         $status = $this->enumValue(
@@ -456,6 +494,10 @@ class AssetDiscoveryService
         $ip = $this->nullableTrim($raw['ip_address'] ?? null);
         $hostname = $this->nullableTrim($raw['hostname'] ?? null);
         $port = $this->nullableTrim($raw['port'] ?? null);
+        $operatingSystem = $this->nullableTrim($raw['operating_system'] ?? null);
+        $osVersion = $this->nullableTrim($raw['os_version'] ?? null);
+        $osEolDate = $this->normalizeDate($raw['os_eol_date'] ?? null);
+        $criticality = $this->deriveCriticalityFromEol($assetType, $osEolDate, [], 'medium');
         $bankId = $this->nullableInt($raw['bank_id'] ?? null);
 
         if ($bankId && !Bank::where('id', $bankId)->exists()) {
@@ -465,6 +507,8 @@ class AssetDiscoveryService
         return [
             'name' => $name,
             'asset_type' => $assetType,
+            'host_type' => $hostType,
+            'server_role' => $serverRole,
             'environment' => $environment,
             'criticality' => $criticality,
             'status' => $status,
@@ -474,11 +518,14 @@ class AssetDiscoveryService
             'bank_id' => $bankId,
             'ip_address' => $ip,
             'hostname' => $hostname,
+            'operating_system' => $operatingSystem,
+            'os_version' => $osVersion,
+            'os_eol_date' => $osEolDate,
             'port' => $port,
             'source' => $this->enumValue(
-                $raw['source'] ?? 'discovery',
-                ['manual', 'discovery', 'catalog_sync', 'manual_seed', 'import', 'sync'],
-                'discovery'
+                $raw['source'] ?? 'import',
+                ['manual', 'import'],
+                'import'
             ),
             'confidence' => max(0, min(100, (int) ($raw['confidence'] ?? 75))),
             'notes' => $this->nullableTrim($raw['notes'] ?? null),
@@ -498,6 +545,50 @@ class AssetDiscoveryService
     {
         $value = Str::lower(trim((string) $value));
         return in_array($value, $allowed) ? $value : $fallback;
+    }
+
+    /**
+     * Normalize legacy and current asset types.
+     *
+     * @param  mixed  $assetType
+     * @return string
+     */
+    private function normalizeAssetType($assetType)
+    {
+        $assetType = Str::lower(trim((string) $assetType));
+
+        $mapping = [
+            'application' => 'application',
+            'application_server' => 'application_server',
+            'server' => 'application_server',
+            'database_server' => 'database_server',
+            'database' => 'database_server',
+            'network_peripheral' => 'network_peripheral',
+            'network' => 'network_peripheral',
+            'etc' => 'etc',
+            'endpoint' => 'etc',
+            'storage' => 'etc',
+            'other' => 'etc',
+        ];
+
+        return $mapping[$assetType] ?? 'etc';
+    }
+
+    /**
+     * Normalize nullable enum values.
+     *
+     * @param  mixed  $value
+     * @param  array<int, string>  $allowed
+     * @param  string  $fallback
+     * @return string|null
+     */
+    private function nullableEnumValue($value, array $allowed, $fallback)
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        return $this->enumValue($value, $allowed, $fallback);
     }
 
     /**
@@ -529,6 +620,104 @@ class AssetDiscoveryService
         }
 
         return (int) $value;
+    }
+
+    /**
+     * Normalize date to Y-m-d.
+     *
+     * @param  mixed  $value
+     * @return string|null
+     */
+    private function normalizeDate($value)
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $parsed = strtotime((string) $value);
+        return $parsed ? date('Y-m-d', $parsed) : null;
+    }
+
+    /**
+     * Derive criticality from nearest EOL date.
+     *
+     * @param  string  $assetType
+     * @param  mixed  $osEolDate
+     * @param  array<string, mixed>  $assetProfile
+     * @param  string  $fallback
+     * @return string
+     */
+    private function deriveCriticalityFromEol($assetType, $osEolDate, array $assetProfile, $fallback = 'medium')
+    {
+        $daysCandidates = [];
+
+        $osDays = $this->daysUntilDate($osEolDate);
+        if ($osDays !== null) {
+            $daysCandidates[] = $osDays;
+        }
+
+        $licenseEolDate = $this->databaseLicenseEolDate($assetType, $assetProfile);
+        $licenseDays = $this->daysUntilDate($licenseEolDate);
+        if ($licenseDays !== null) {
+            $daysCandidates[] = $licenseDays;
+        }
+
+        if (empty($daysCandidates)) {
+            return $fallback;
+        }
+
+        $nearestDays = min($daysCandidates);
+        if ($nearestDays < 0) {
+            return 'critical';
+        }
+        if ($nearestDays <= 30) {
+            return 'high';
+        }
+        if ($nearestDays <= 90) {
+            return 'medium';
+        }
+
+        return 'low';
+    }
+
+    /**
+     * Extract database license EOL date when applicable.
+     *
+     * @param  string  $assetType
+     * @param  array<string, mixed>  $assetProfile
+     * @return string|null
+     */
+    private function databaseLicenseEolDate($assetType, array $assetProfile)
+    {
+        if (!in_array($assetType, ['database_server', 'database'], true)) {
+            return null;
+        }
+
+        return $this->normalizeDate($assetProfile['db_license_eol_date'] ?? null);
+    }
+
+    /**
+     * Calculate days until date (negative means expired).
+     *
+     * @param  mixed  $dateValue
+     * @return int|null
+     */
+    private function daysUntilDate($dateValue)
+    {
+        if (!$dateValue) {
+            return null;
+        }
+
+        if ($dateValue instanceof \DateTimeInterface) {
+            $dateValue = $dateValue->format('Y-m-d');
+        }
+
+        $normalized = $this->normalizeDate($dateValue);
+        if (!$normalized) {
+            return null;
+        }
+
+        return now()->startOfDay()->diffInDays($normalized, false);
     }
 
     /**
@@ -640,4 +829,3 @@ class AssetDiscoveryService
         ]);
     }
 }
-

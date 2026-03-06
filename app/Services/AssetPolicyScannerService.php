@@ -113,8 +113,12 @@ class AssetPolicyScannerService
     {
         $violations = [];
         $tags = strtolower((string) $asset->tags);
+        $profile = is_array($asset->asset_profile) ? $asset->asset_profile : [];
         $isStale = !$asset->last_seen_at || $asset->last_seen_at->lt(now()->subDays(30));
         $isCritical = in_array($asset->criticality, ['high', 'critical']);
+        $isServerClass = in_array($asset->asset_type, ['application_server', 'database_server', 'server'], true)
+            || !empty($asset->host_type)
+            || !empty($asset->server_role);
 
         if (!$asset->owner_name || trim($asset->owner_name) === '') {
             $violations[] = [
@@ -167,6 +171,83 @@ class AssetPolicyScannerService
             ];
         }
 
+        if ($isServerClass && $asset->status !== 'retired' && (!$asset->operating_system || trim($asset->operating_system) === '')) {
+            $violations[] = [
+                'policy_code' => 'OS_INFO_MISSING',
+                'severity' => 'high',
+                'message' => 'Server-class asset has no operating system information.',
+                'metadata' => [
+                    'asset_type' => $asset->asset_type,
+                    'host_type' => $asset->host_type,
+                    'server_role' => $asset->server_role,
+                ],
+            ];
+        }
+
+        if ($asset->status !== 'retired' && $asset->os_eol_date) {
+            if ($asset->os_eol_date->lt(now()->startOfDay())) {
+                $violations[] = [
+                    'policy_code' => 'OS_EOL_EXPIRED',
+                    'severity' => 'critical',
+                    'message' => 'Operating system is past EOL and must be remediated immediately.',
+                    'metadata' => [
+                        'operating_system' => $asset->operating_system,
+                        'os_version' => $asset->os_version,
+                        'os_eol_date' => $asset->os_eol_date->toDateString(),
+                    ],
+                ];
+            } elseif ($asset->os_eol_date->lte(now()->addDays(90)->startOfDay())) {
+                $violations[] = [
+                    'policy_code' => 'OS_EOL_NEAR',
+                    'severity' => 'high',
+                    'message' => 'Operating system EOL is within the next 90 days.',
+                    'metadata' => [
+                        'operating_system' => $asset->operating_system,
+                        'os_version' => $asset->os_version,
+                        'os_eol_date' => $asset->os_eol_date->toDateString(),
+                        'days_left' => now()->diffInDays($asset->os_eol_date, false),
+                    ],
+                ];
+            }
+        }
+
+        if ($asset->status !== 'retired' && in_array($asset->asset_type, ['database_server', 'database'], true)) {
+            $licenseEolDate = null;
+            if (!empty($profile['db_license_eol_date'])) {
+                $parsed = strtotime((string) $profile['db_license_eol_date']);
+                if ($parsed) {
+                    $licenseEolDate = date('Y-m-d', $parsed);
+                }
+            }
+
+            if ($licenseEolDate) {
+                $daysLeft = now()->startOfDay()->diffInDays($licenseEolDate, false);
+
+                if ($daysLeft < 0) {
+                    $violations[] = [
+                        'policy_code' => 'DB_LICENSE_EOL_EXPIRED',
+                        'severity' => 'critical',
+                        'message' => 'Database license is expired and must be renewed or migrated immediately.',
+                        'metadata' => [
+                            'db_license_type' => $profile['db_license_type'] ?? null,
+                            'db_license_eol_date' => $licenseEolDate,
+                        ],
+                    ];
+                } elseif ($daysLeft <= 90) {
+                    $violations[] = [
+                        'policy_code' => 'DB_LICENSE_EOL_NEAR',
+                        'severity' => 'high',
+                        'message' => 'Database license EOL is within the next 90 days.',
+                        'metadata' => [
+                            'db_license_type' => $profile['db_license_type'] ?? null,
+                            'db_license_eol_date' => $licenseEolDate,
+                            'days_left' => $daysLeft,
+                        ],
+                    ];
+                }
+            }
+        }
+
         return $violations;
     }
 
@@ -190,4 +271,3 @@ class AssetPolicyScannerService
         ]);
     }
 }
-

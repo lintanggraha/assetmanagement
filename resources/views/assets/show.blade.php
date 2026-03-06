@@ -14,6 +14,59 @@
 </section>
 
 <section class="content">
+  @php
+    $assetType = $asset->asset_type;
+    if ($assetType === 'server') {
+      $assetType = 'application_server';
+    } elseif ($assetType === 'database') {
+      $assetType = 'database_server';
+    } elseif ($assetType === 'network') {
+      $assetType = 'network_peripheral';
+    } elseif (in_array($assetType, ['endpoint', 'storage', 'other'])) {
+      $assetType = 'etc';
+    }
+
+    $profile = is_array($asset->asset_profile) ? $asset->asset_profile : [];
+    $isServerType = in_array($assetType, ['application_server', 'database_server']);
+    $isServiceHostType = $assetType === 'application_server';
+    $eolNotifications = [];
+    $hasExpiredEol = false;
+
+    if ($asset->status !== 'retired') {
+      if ($asset->os_eol_date) {
+        $osDaysLeft = now()->startOfDay()->diffInDays($asset->os_eol_date->format('Y-m-d'), false);
+        if ($osDaysLeft <= 90) {
+          $osExpired = $osDaysLeft < 0;
+          $hasExpiredEol = $hasExpiredEol || $osExpired;
+          $eolNotifications[] = [
+            'target' => 'OS',
+            'state' => $osExpired ? 'expired' : 'near',
+            'days_left' => $osDaysLeft,
+            'eol_date' => $asset->os_eol_date->format('Y-m-d'),
+          ];
+        }
+      }
+
+      if ($assetType === 'database_server' && !empty($profile['db_license_eol_date'])) {
+        $licenseTs = strtotime((string) $profile['db_license_eol_date']);
+        if ($licenseTs) {
+          $licenseDate = date('Y-m-d', $licenseTs);
+          $licenseDaysLeft = now()->startOfDay()->diffInDays($licenseDate, false);
+          if ($licenseDaysLeft <= 90) {
+            $licenseExpired = $licenseDaysLeft < 0;
+            $hasExpiredEol = $hasExpiredEol || $licenseExpired;
+            $eolNotifications[] = [
+              'target' => 'License',
+              'state' => $licenseExpired ? 'expired' : 'near',
+              'days_left' => $licenseDaysLeft,
+              'eol_date' => $licenseDate,
+            ];
+          }
+        }
+      }
+    }
+  @endphp
+
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
       <h4 class="mb-1">{{ $asset->name }}</h4>
@@ -36,6 +89,25 @@
     </div>
   </div>
 
+  @if(!empty($eolNotifications))
+    <div class="alert alert-{{ $hasExpiredEol ? 'danger' : 'warning' }} mb-3">
+      <strong>Notifikasi EOL Asset:</strong>
+      <ul class="mb-0 mt-2 ps-3">
+        @foreach($eolNotifications as $notif)
+          <li>
+            {{ $notif['target'] }} {{ strtoupper($notif['state']) }}
+            @if($notif['days_left'] < 0)
+              {{ abs($notif['days_left']) }} hari lalu
+            @else
+              dalam {{ $notif['days_left'] }} hari
+            @endif
+            ({{ $notif['eol_date'] }})
+          </li>
+        @endforeach
+      </ul>
+    </div>
+  @endif
+
   <div class="row g-3 mb-3">
     <div class="col-12 col-lg-8">
       <div class="card h-100">
@@ -46,14 +118,24 @@
           <div class="row g-2">
             <div class="col-12 col-md-4">
               <small class="text-muted d-block">Type</small>
-              <span class="text-capitalize">{{ $asset->asset_type }}</span>
+              <span class="text-capitalize">{{ ucwords(str_replace('_', ' ', $assetType)) }}</span>
             </div>
+            @if($isServerType)
+              <div class="col-12 col-md-4">
+                <small class="text-muted d-block">Host Type</small>
+                <span class="text-capitalize">{{ $asset->host_type ? str_replace('_', ' ', $asset->host_type) : '-' }}</span>
+              </div>
+              <div class="col-12 col-md-4">
+                <small class="text-muted d-block">Server Role</small>
+                <span class="text-capitalize">{{ $asset->server_role ? str_replace('_', ' ', $asset->server_role) : '-' }}</span>
+              </div>
+            @endif
             <div class="col-12 col-md-4">
               <small class="text-muted d-block">Environment</small>
               <span class="text-uppercase">{{ $asset->environment }}</span>
             </div>
             <div class="col-12 col-md-4">
-              <small class="text-muted d-block">Status</small>
+              <small class="text-muted d-block">Server Status</small>
               <span class="badge bg-label-secondary text-capitalize">{{ $asset->status }}</span>
             </div>
             <div class="col-12 col-md-4">
@@ -68,10 +150,35 @@
               <small class="text-muted d-block">Source</small>
               <span class="text-uppercase">{{ $asset->source }}</span>
             </div>
-            <div class="col-12 col-md-4">
-              <small class="text-muted d-block">IP / Host / Port</small>
-              <span>{{ $asset->ip_address ?: '-' }} / {{ $asset->hostname ?: '-' }} / {{ $asset->port ?: '-' }}</span>
-            </div>
+            @if($isServerType)
+              <div class="col-12 col-md-4">
+                <small class="text-muted d-block">Operating System</small>
+                <span>{{ $asset->operating_system ?: '-' }}</span>
+              </div>
+              <div class="col-12 col-md-4">
+                <small class="text-muted d-block">OS Version</small>
+                <span>{{ $asset->os_version ?: '-' }}</span>
+              </div>
+              <div class="col-12 col-md-4">
+                <small class="text-muted d-block">OS EOL</small>
+                @if($asset->os_eol_date)
+                  @php
+                    $isExpired = $asset->os_eol_date->lt(now()->startOfDay());
+                    $isNear = !$isExpired && $asset->os_eol_date->lte(now()->addDays(90)->startOfDay());
+                    $eolClass = $isExpired ? 'danger' : ($isNear ? 'warning' : 'success');
+                  @endphp
+                  <span class="badge bg-label-{{ $eolClass }}">{{ $asset->os_eol_date->format('Y-m-d') }}</span>
+                @else
+                  <span>-</span>
+                @endif
+              </div>
+            @endif
+            @if($assetType !== 'application')
+              <div class="col-12 col-md-4">
+                <small class="text-muted d-block">IP / Host / Port</small>
+                <span>{{ $asset->ip_address ?: '-' }} / {{ $asset->hostname ?: '-' }} / {{ $asset->port ?: '-' }}</span>
+              </div>
+            @endif
             <div class="col-12 col-md-4">
               <small class="text-muted d-block">Owner</small>
               <span>{{ $asset->owner_name ?: 'Unassigned' }}</span>
@@ -139,15 +246,202 @@
         </div>
         <div class="card-body d-grid gap-2">
           <a href="{{ route('assets.index') }}" class="btn btn-outline-secondary btn-sm">Back to Inventory</a>
-          <a href="{{ route('discovery.index') }}" class="btn btn-outline-primary btn-sm">Open Discovery Center</a>
+          @if(Auth::user()->canRunDiscovery())
+            <a href="{{ route('discovery.index') }}" class="btn btn-outline-primary btn-sm">Open Discovery Center</a>
+          @endif
         </div>
       </div>
     </div>
   </div>
 
+  <div class="card mb-3">
+    <div class="card-header">
+      <h5 class="mb-0">Type Specific Detail</h5>
+    </div>
+    <div class="card-body">
+      @if($assetType === 'application')
+        <div class="row g-2">
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Runtime / Basis</small>
+            <span>{{ $profile['application_runtime'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Jenis Aplikasi</small>
+            <span class="text-capitalize">{{ isset($profile['application_category']) ? str_replace('_', ' ', $profile['application_category']) : '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Versi Aplikasi</small>
+            <span>{{ $profile['application_version'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Rilis Pertama</small>
+            <span>{{ $profile['first_release_date'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Rilis Terakhir</small>
+            <span>{{ $profile['last_release_date'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Status Aplikasi</small>
+            <span>{{ ($profile['application_status'] ?? '') === 'not_used' ? 'Tidak Digunakan' : (($profile['application_status'] ?? '') === 'used' ? 'Digunakan' : '-') }}</span>
+          </div>
+        </div>
+      @elseif($assetType === 'network_peripheral')
+        <div class="row g-2">
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Peripheral Type</small>
+            <span class="text-capitalize">{{ isset($profile['peripheral_type']) ? str_replace('_', ' ', $profile['peripheral_type']) : '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Vendor</small>
+            <span>{{ $profile['vendor'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Model</small>
+            <span>{{ $profile['model'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Serial Number</small>
+            <span>{{ $profile['serial_number'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Firmware Version</small>
+            <span>{{ $profile['firmware_version'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Firmware EOL</small>
+            <span>{{ $profile['firmware_eol_date'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Support Contract End</small>
+            <span>{{ $profile['support_contract_end_date'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-8">
+            <small class="text-muted d-block">Management Interface</small>
+            <span>{{ $profile['management_interface'] ?? '-' }}</span>
+          </div>
+        </div>
+      @elseif($assetType === 'database_server')
+        <div class="row g-2">
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">DB License Type</small>
+            <span class="text-capitalize">{{ $profile['db_license_type'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">DB License EOL</small>
+            @if(!empty($profile['db_license_eol_date']))
+              @php
+                $licenseTs = strtotime((string) $profile['db_license_eol_date']);
+                $licenseBadgeClass = 'success';
+                if ($licenseTs) {
+                  $licenseDate = date('Y-m-d', $licenseTs);
+                  $licenseDaysLeft = now()->startOfDay()->diffInDays($licenseDate, false);
+                  if ($licenseDaysLeft < 0) {
+                    $licenseBadgeClass = 'danger';
+                  } elseif ($licenseDaysLeft <= 90) {
+                    $licenseBadgeClass = 'warning';
+                  }
+                }
+              @endphp
+              <span class="badge bg-label-{{ $licenseBadgeClass }}">{{ $profile['db_license_eol_date'] }}</span>
+            @else
+              <span>-</span>
+            @endif
+          </div>
+        </div>
+      @elseif($assetType === 'etc')
+        <div class="row g-2">
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Endpoint Type</small>
+            <span class="text-capitalize">{{ isset($profile['endpoint_type']) ? str_replace('_', ' ', $profile['endpoint_type']) : '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Assigned User</small>
+            <span>{{ $profile['assigned_user'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Department</small>
+            <span>{{ $profile['department'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Device Serial</small>
+            <span>{{ $profile['device_serial_number'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Purchase Date</small>
+            <span>{{ $profile['purchase_date'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Warranty End</small>
+            <span>{{ $profile['warranty_end_date'] ?? '-' }}</span>
+          </div>
+          <div class="col-12 col-md-4">
+            <small class="text-muted d-block">Device Condition</small>
+            <span class="text-capitalize">{{ isset($profile['device_condition']) ? str_replace('_', ' ', $profile['device_condition']) : '-' }}</span>
+          </div>
+        </div>
+      @else
+        <p class="text-muted mb-0">No additional type-specific details.</p>
+      @endif
+    </div>
+  </div>
+
   <div class="row g-3">
-    <div class="col-12 col-lg-6">
-      <div class="card h-100">
+    @if($isServiceHostType)
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Hosted Services / Applications</h5>
+            <span class="badge bg-label-primary">{{ $asset->services->count() }} Service(s)</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Type</th>
+                  <th>Tech Stack</th>
+                  <th>Version</th>
+                  <th>Status</th>
+                  <th>Port</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                @forelse($asset->services as $service)
+                  @php
+                    $statusClass = $service->status === 'running'
+                      ? 'success'
+                      : ($service->status === 'degraded' ? 'warning' : ($service->status === 'down' ? 'danger' : 'secondary'));
+                  @endphp
+                  <tr>
+                    <td>
+                      {{ $service->service_name }}
+                      @if($service->is_primary)
+                        <span class="badge bg-label-primary">Primary</span>
+                      @endif
+                    </td>
+                    <td class="text-capitalize">{{ str_replace('_', ' ', $service->service_type) }}</td>
+                    <td>{{ $service->technology_stack ?: '-' }}</td>
+                    <td>{{ $service->version ?: '-' }}</td>
+                    <td><span class="badge bg-label-{{ $statusClass }} text-capitalize">{{ $service->status }}</span></td>
+                    <td>{{ $service->port ?: '-' }}</td>
+                    <td>{{ $service->notes ?: '-' }}</td>
+                  </tr>
+                @empty
+                  <tr>
+                    <td colspan="7" class="text-center text-muted py-3">No service/application mapped to this asset yet.</td>
+                  </tr>
+                @endforelse
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    @endif
+
+    <div class="col-12">
+      <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Open Policy Violations</h5>
           <a href="{{ route('policies.index') }}" class="btn btn-outline-secondary btn-xs">Open Policies</a>
@@ -182,7 +476,7 @@
       </div>
     </div>
 
-    <div class="col-12 col-lg-6">
+    <div class="col-12">
       <div class="card h-100">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Pending Change Requests</h5>
@@ -261,44 +555,46 @@
       </div>
     </div>
 
-    <div class="col-12 col-lg-6">
-      <div class="card h-100">
-        <div class="card-header">
-          <h5 class="mb-0">Latest Discovery Findings</h5>
-        </div>
-        <div class="table-responsive">
-          <table class="table table-sm mb-0">
-            <thead>
-              <tr>
-                <th>Run</th>
-                <th>Status</th>
-                <th>Confidence</th>
-                <th>Captured At</th>
-              </tr>
-            </thead>
-            <tbody>
-              @forelse($latestFindings as $finding)
-                @php
-                  $findingClass = $finding->finding_status === 'new' ? 'success' : ($finding->finding_status === 'updated' ? 'warning' : 'secondary');
-                @endphp
+    @if(Auth::user()->canRunDiscovery())
+      <div class="col-12 col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-0">Latest Discovery Findings</h5>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead>
                 <tr>
-                  <td>
-                    <a href="{{ route('discovery.show', $finding->run_id) }}">{{ substr(optional($finding->run)->run_uuid, 0, 8) }}</a>
-                  </td>
-                  <td><span class="badge bg-label-{{ $findingClass }}">{{ $finding->finding_status }}</span></td>
-                  <td>{{ $finding->confidence }}%</td>
-                  <td>{{ $finding->created_at->format('Y-m-d H:i') }}</td>
+                  <th>Run</th>
+                  <th>Status</th>
+                  <th>Confidence</th>
+                  <th>Captured At</th>
                 </tr>
-              @empty
-                <tr>
-                  <td colspan="4" class="text-center text-muted py-3">No discovery findings yet.</td>
-                </tr>
-              @endforelse
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @forelse($latestFindings as $finding)
+                  @php
+                    $findingClass = $finding->finding_status === 'new' ? 'success' : ($finding->finding_status === 'updated' ? 'warning' : 'secondary');
+                  @endphp
+                  <tr>
+                    <td>
+                      <a href="{{ route('discovery.show', $finding->run_id) }}">{{ substr(optional($finding->run)->run_uuid, 0, 8) }}</a>
+                    </td>
+                    <td><span class="badge bg-label-{{ $findingClass }}">{{ $finding->finding_status }}</span></td>
+                    <td>{{ $finding->confidence }}%</td>
+                    <td>{{ $finding->created_at->format('Y-m-d H:i') }}</td>
+                  </tr>
+                @empty
+                  <tr>
+                    <td colspan="4" class="text-center text-muted py-3">No discovery findings yet.</td>
+                  </tr>
+                @endforelse
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
+    @endif
   </div>
 </section>
 @endsection

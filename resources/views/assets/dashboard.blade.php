@@ -13,6 +13,16 @@
 </section>
 
 <section class="content">
+  @if(($eolNotification['total'] ?? 0) > 0)
+    <div class="alert alert-warning mb-3">
+      <strong>Notifikasi EOL:</strong>
+      OS expired: {{ $eolNotification['os_expired'] }},
+      OS <= 90 hari: {{ $eolNotification['os_near'] }},
+      License expired: {{ $eolNotification['license_expired'] }},
+      License <= 90 hari: {{ $eolNotification['license_near'] }}.
+    </div>
+  @endif
+
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
       <h5 class="mb-1">Operational Snapshot</h5>
@@ -139,7 +149,7 @@
               </div>
             @endforeach
           @else
-            <p class="text-muted mb-0">Belum ada asset. Jalankan discovery pertama dari Discovery Center.</p>
+            <p class="text-muted mb-0">Belum ada asset. Tambahkan asset manual dari Asset Inventory.</p>
           @endif
         </div>
       </div>
@@ -171,11 +181,11 @@
           </div>
           <div class="mb-2">
             <div class="d-flex justify-content-between">
-              <span>Discovery Coverage</span>
-              <strong>{{ $coverage['discovery'] }}%</strong>
+              <span>Import Coverage</span>
+              <strong>{{ $coverage['import'] }}%</strong>
             </div>
             <div class="progress mt-1" style="height: 8px;">
-              <div class="progress-bar bg-primary" style="width: {{ $coverage['discovery'] }}%;"></div>
+              <div class="progress-bar bg-primary" style="width: {{ $coverage['import'] }}%;"></div>
             </div>
           </div>
           <hr>
@@ -192,8 +202,13 @@
     </div>
   </div>
 
+  @php
+    $showDiscoveryPanels = Auth::user()->canRunDiscovery();
+    $topRiskColClass = $showDiscoveryPanels ? 'col-12 col-lg-7' : 'col-12';
+  @endphp
+
   <div class="row g-3">
-    <div class="col-12 col-lg-7">
+    <div class="{{ $topRiskColClass }}">
       <div class="card">
         <div class="card-header">
           <h5 class="mb-0">Top Risk Assets</h5>
@@ -232,47 +247,49 @@
       </div>
     </div>
 
-    <div class="col-12 col-lg-5">
-      <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">Recent Discovery Runs</h5>
-          <a href="{{ route('discovery.index') }}" class="btn btn-sm btn-outline-primary">View All</a>
-        </div>
-        <div class="table-responsive">
-          <table class="table table-sm mb-0">
-            <thead>
-              <tr>
-                <th>Run</th>
-                <th>Status</th>
-                <th>Result</th>
-              </tr>
-            </thead>
-            <tbody>
-              @forelse($recentRuns as $run)
-                @php
-                  $statusClass = $run->status === 'completed' ? 'success' : ($run->status === 'failed' ? 'danger' : 'warning');
-                @endphp
+    @if($showDiscoveryPanels)
+      <div class="col-12 col-lg-5">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Recent Discovery Runs</h5>
+            <a href="{{ route('discovery.index') }}" class="btn btn-sm btn-outline-primary">View All</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead>
                 <tr>
-                  <td>
-                    <a href="{{ route('discovery.show', $run->id) }}" class="fw-semibold">{{ substr($run->run_uuid, 0, 8) }}</a>
-                    <small class="d-block text-muted">{{ optional($run->started_at)->format('Y-m-d H:i') }}</small>
-                  </td>
-                  <td><span class="badge bg-label-{{ $statusClass }} text-capitalize">{{ $run->status }}</span></td>
-                  <td>
-                    <small class="d-block">New: {{ $run->total_new }}</small>
-                    <small class="d-block">Updated: {{ $run->total_updated }}</small>
-                  </td>
+                  <th>Run</th>
+                  <th>Status</th>
+                  <th>Result</th>
                 </tr>
-              @empty
-                <tr>
-                  <td colspan="3" class="text-center text-muted py-4">Belum ada discovery run.</td>
-                </tr>
-              @endforelse
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @forelse($recentRuns as $run)
+                  @php
+                    $statusClass = $run->status === 'completed' ? 'success' : ($run->status === 'failed' ? 'danger' : 'warning');
+                  @endphp
+                  <tr>
+                    <td>
+                      <a href="{{ route('discovery.show', $run->id) }}" class="fw-semibold">{{ substr($run->run_uuid, 0, 8) }}</a>
+                      <small class="d-block text-muted">{{ optional($run->started_at)->format('Y-m-d H:i') }}</small>
+                    </td>
+                    <td><span class="badge bg-label-{{ $statusClass }} text-capitalize">{{ $run->status }}</span></td>
+                    <td>
+                      <small class="d-block">New: {{ $run->total_new }}</small>
+                      <small class="d-block">Updated: {{ $run->total_updated }}</small>
+                    </td>
+                  </tr>
+                @empty
+                  <tr>
+                    <td colspan="3" class="text-center text-muted py-4">Belum ada discovery run.</td>
+                  </tr>
+                @endforelse
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
+    @endif
   </div>
 </section>
 @endsection

@@ -4,7 +4,7 @@
 <section class="content-header">
   <h1>
     USER GUIDE
-    <small>Panduan lengkap penggunaan Asset Discovery & Asset Management</small>
+    <small>Panduan lengkap penggunaan Asset Management (mode input manual)</small>
   </h1>
   <ol class="breadcrumb">
     <li><a href="{{ route('dashboard') }}"><i class="fa fa-home"></i> Home</a></li>
@@ -21,6 +21,11 @@
     <strong>Akun aktif:</strong> {{ $user->name }} ({{ strtoupper($user->role) }}) |
     <strong>Tanggal akses:</strong> {{ now()->format('Y-m-d H:i:s') }} |
     <strong>Versi panduan:</strong> 1.0
+  </div>
+
+  <div class="alert alert-warning">
+    <strong>Catatan mode saat ini:</strong> Discovery Center sedang di-hide sementara.
+    Pengelolaan asset dilakukan melalui input manual di Asset Inventory.
   </div>
 
   <div class="card mb-3">
@@ -51,7 +56,7 @@
           <button type="button" class="btn btn-outline-primary btn-sm w-100 text-start guide-nav-btn" data-guide-target="asset-detail">7. Asset Detail</button>
         </div>
         <div class="col-12 col-md-6 col-xl-3">
-          <button type="button" class="btn btn-outline-primary btn-sm w-100 text-start guide-nav-btn" data-guide-target="discovery">8. Discovery Center</button>
+          <button type="button" class="btn btn-outline-primary btn-sm w-100 text-start guide-nav-btn" data-guide-target="discovery">8. Discovery (Sementara Off)</button>
         </div>
         <div class="col-12 col-md-6 col-xl-3">
           <button type="button" class="btn btn-outline-primary btn-sm w-100 text-start guide-nav-btn" data-guide-target="policy">9. Policy Violations</button>
@@ -80,7 +85,7 @@
       <ol class="mb-3">
         <li>Masuk ke <strong>Asset Ops Center</strong> untuk melihat kondisi total asset, risiko, violation, dan approval.</li>
         <li>Buka <strong>Asset Inventory</strong> untuk mencari data asset spesifik.</li>
-        <li>Jika role Anda operator/admin/superadmin, jalankan <strong>Discovery Center</strong> untuk sinkronisasi asset.</li>
+        <li>Tambahkan/ubah data melalui <strong>Asset Inventory</strong> karena Discovery Center sedang nonaktif.</li>
         <li>Review <strong>Policy Violations</strong> untuk masalah kepatuhan data.</li>
         <li>Jika role Anda auditor/admin/superadmin, proses permintaan di <strong>Approvals</strong>.</li>
         <li>Jika role Anda admin/superadmin, kelola user di <strong>User Management</strong>.</li>
@@ -111,13 +116,13 @@
               <td><strong>superadmin</strong></td>
               <td>Global (semua asset)</td>
               <td>Semua menu</td>
-              <td>Kelola user, kelola asset, run discovery, approve/reject, resolve violation</td>
+              <td>Kelola user, kelola asset, approve/reject, resolve violation</td>
             </tr>
             <tr>
               <td><strong>admin</strong></td>
               <td>Global (semua asset)</td>
               <td>Semua menu kecuali batasan superadmin-only pada akun superadmin</td>
-              <td>Kelola user (dengan guardrail), kelola asset, run discovery, approve/reject, resolve violation</td>
+              <td>Kelola user (dengan guardrail), kelola asset, approve/reject, resolve violation</td>
             </tr>
             <tr>
               <td><strong>auditor</strong></td>
@@ -128,14 +133,14 @@
             <tr>
               <td><strong>operator</strong></td>
               <td>Scope milik sendiri</td>
-              <td>Asset Ops, User Guide, Asset Inventory, Discovery, Policies</td>
-              <td>Create/update/retire asset, run discovery, kirim sensitive change request</td>
+              <td>Asset Ops, User Guide, Asset Inventory, Policies</td>
+              <td>Create/update/retire asset, kirim sensitive change request</td>
             </tr>
             <tr>
               <td><strong>viewer</strong></td>
               <td>Scope milik sendiri</td>
               <td>Asset Ops, User Guide, Asset Inventory, Policies</td>
-              <td>Read-only (tanpa create/edit/retire, tanpa run discovery, tanpa approval)</td>
+              <td>Read-only (tanpa create/edit/retire, tanpa approval)</td>
             </tr>
           </tbody>
         </table>
@@ -162,7 +167,7 @@
             <tr>
               <td>Asset Ops Center</td>
               <td><code>/dashboard</code></td>
-              <td>Ringkasan operasional: KPI asset, komposisi, hygiene, top risk, recent discovery runs</td>
+              <td>Ringkasan operasional: KPI asset, komposisi, hygiene, dan top risk</td>
               <td>Semua user login aktif</td>
             </tr>
             <tr>
@@ -178,10 +183,10 @@
               <td>Semua user login aktif</td>
             </tr>
             <tr>
-              <td>Discovery Center</td>
+              <td>Discovery Center (sementara off)</td>
               <td><code>/discovery</code></td>
-              <td>Jalankan discovery run dan monitor histori hasil ingest asset</td>
-              <td>superadmin/admin/operator</td>
+              <td>Sedang di-hide sementara. Akses akan diarahkan ke dashboard.</td>
+              <td>Tidak ditampilkan</td>
             </tr>
             <tr>
               <td>Policy Violations</td>
@@ -287,8 +292,8 @@
             </tr>
             <tr>
               <td><code>Run Discovery</code></td>
-              <td>Buka Discovery Center untuk ingest data asset</td>
-              <td>superadmin/admin/operator</td>
+              <td>Sementara tidak muncul karena Discovery Center di-hide.</td>
+              <td>Conditional (hanya saat discovery diaktifkan)</td>
             </tr>
             <tr>
               <td><code>Policies</code></td>
@@ -313,7 +318,7 @@
       <p class="mb-2">
         <strong>Total Assets:</strong> jumlah total asset dalam scope user.
         <strong>Active:</strong> status <code>active</code>.
-        <strong>Critical Assets:</strong> criticality <code>high/critical</code>.
+        <strong>Critical Assets:</strong> asset dengan criticality <code>high/critical</code> yang diturunkan dari EOL OS/license.
         <strong>Stale &gt; 30 Days:</strong> asset yang lama tidak terlihat.
       </p>
       <p class="mb-2">
@@ -326,9 +331,9 @@
       <h6>C. Widget Operasional</h6>
       <ul>
         <li><strong>Asset Composition by Type:</strong> komposisi per jenis asset + persentase.</li>
-        <li><strong>Inventory Data Hygiene:</strong> coverage owner, visibility last_seen, dan discovery coverage.</li>
+        <li><strong>Inventory Data Hygiene:</strong> coverage owner, visibility last_seen, dan discovery coverage (jika discovery aktif).</li>
         <li><strong>Top Risk Assets:</strong> daftar asset prioritas tertinggi untuk mitigasi.</li>
-        <li><strong>Recent Discovery Runs:</strong> histori run terbaru, klik ID run untuk detail.</li>
+        <li><strong>Recent Discovery Runs:</strong> panel ini hanya muncul jika discovery diaktifkan.</li>
       </ul>
     </div>
   </div>
@@ -356,7 +361,7 @@
             </tr>
             <tr>
               <td><code>asset_type</code></td>
-              <td>application/database/server/network/storage/endpoint/other</td>
+              <td>application/application_server/database_server/network_peripheral/etc</td>
               <td>Filter berdasarkan tipe asset</td>
             </tr>
             <tr>
@@ -381,7 +386,7 @@
             </tr>
             <tr>
               <td><code>source</code></td>
-              <td>manual/discovery/catalog_sync/manual_seed/import/sync</td>
+              <td>manual/import</td>
               <td>Lacak sumber data asset</td>
             </tr>
             <tr>
@@ -395,7 +400,7 @@
 
       <h6>B. Tombol di Header Inventory</h6>
       <ul>
-        <li><strong>Discovery Center:</strong> shortcut ke halaman discovery (role tertentu).</li>
+        <li><strong>Discovery Center:</strong> saat ini tidak ditampilkan (discovery di-hide).</li>
         <li><strong>Policies:</strong> shortcut ke policy violations.</li>
         <li><strong>Approvals:</strong> shortcut ke approval queue (role tertentu).</li>
         <li><strong>Add Asset:</strong> tambah asset baru (role tertentu).</li>
@@ -424,14 +429,16 @@
             <tr><td>Name</td><td>Ya</td><td>Nama utama asset di inventory</td></tr>
             <tr><td>Asset Type</td><td>Ya</td><td>Klasifikasi jenis asset</td></tr>
             <tr><td>Environment</td><td>Ya</td><td>Lingkungan deployment</td></tr>
-            <tr><td>Criticality</td><td>Ya</td><td>Level kritikal bisnis</td></tr>
             <tr><td>Status</td><td>Ya</td><td>Kondisi operasional saat ini</td></tr>
             <tr><td>Lifecycle Stage</td><td>Ya</td><td>Tahap siklus hidup asset</td></tr>
-            <tr><td>Source</td><td>Tidak</td><td>Sumber data asset</td></tr>
-            <tr><td>Discovery Confidence</td><td>Tidak</td><td>Tingkat keyakinan kualitas data discovery (0-100)</td></tr>
+            <tr><td>Source</td><td>Tidak</td><td>Hanya dua nilai: <code>manual</code> atau <code>import</code></td></tr>
             <tr><td>IP/Hostname/Port</td><td>Tidak</td><td>Identitas endpoint asset</td></tr>
             <tr><td>Bank/Business Unit</td><td>Tidak</td><td>Mapping organisasi unit pemilik</td></tr>
-            <tr><td>Owner Name/Email</td><td>Tidak</td><td>Penanggung jawab utama asset</td></tr>
+            <tr><td>Owner Name</td><td>Tidak</td><td>Penanggung jawab utama asset</td></tr>
+            <tr><td>Server Detail</td><td>Kondisional</td><td>Host Type, OS, OS Version, OS EOL untuk tipe server</td></tr>
+            <tr><td>Database License Detail</td><td>Kondisional</td><td>License Type (enterprise/community) dan License EOL untuk database server</td></tr>
+            <tr><td>Hosted Services / Applications</td><td>Kondisional</td><td>Hanya untuk application server</td></tr>
+            <tr><td>Criticality (Auto)</td><td>Otomatis</td><td>Dihitung otomatis dari EOL terdekat (OS dan/atau DB license)</td></tr>
             <tr><td>Last Seen At</td><td>Tidak</td><td>Waktu terakhir asset terdeteksi aktif</td></tr>
             <tr><td>Tags</td><td>Tidak</td><td>Kategori tambahan, pisahkan dengan koma</td></tr>
             <tr><td>Notes</td><td>Tidak</td><td>Catatan operasional/compliance/dependency</td></tr>
@@ -439,6 +446,16 @@
           </tbody>
         </table>
       </div>
+      <p class="mt-3 mb-1">
+        <strong>Rule auto-criticality berbasis EOL:</strong>
+        <code>critical</code> jika sudah expired, <code>high</code> jika <= 30 hari,
+        <code>medium</code> jika <= 90 hari, <code>low</code> jika > 90 hari,
+        dan fallback <code>medium</code> jika data EOL belum tersedia.
+      </p>
+      <p class="mb-0">
+        <strong>Notifikasi EOL:</strong> banner peringatan muncul di Asset Ops Center, Asset Inventory,
+        dan Asset Detail untuk OS/License yang expired atau mendekati 90 hari.
+      </p>
     </div>
   </div>
 
@@ -449,7 +466,7 @@
     <div class="card-body">
       <p class="mb-2">
         Halaman ini adalah pusat observabilitas satu asset. Semua informasi metadata, risk, policy violation, approval request,
-        activity log, dan discovery findings dikumpulkan dalam satu layar.
+        dan activity log dikumpulkan dalam satu layar.
       </p>
       <h6>Fungsi Tombol</h6>
       <ul>
@@ -457,7 +474,7 @@
         <li><strong>Retire:</strong> ubah status asset menjadi retired.</li>
         <li><strong>Approvals:</strong> lompat ke approval queue.</li>
         <li><strong>Back to Inventory:</strong> kembali ke list inventory.</li>
-        <li><strong>Open Discovery Center:</strong> menuju halaman discovery.</li>
+        <li><strong>Open Discovery Center:</strong> hanya muncul jika discovery diaktifkan.</li>
         <li><strong>Open Policies:</strong> lihat daftar violation lintas asset.</li>
         <li><strong>Review Queue:</strong> khusus approver untuk menilai request menunggu.</li>
       </ul>
@@ -467,7 +484,7 @@
         <li><strong>Open Policy Violations:</strong> policy code + severity + pesan masalah.</li>
         <li><strong>Pending Change Requests:</strong> permintaan belum diputuskan.</li>
         <li><strong>Activity Log:</strong> audit trail aktivitas perubahan.</li>
-        <li><strong>Latest Discovery Findings:</strong> hasil sinkronisasi terkini.</li>
+        <li><strong>Latest Discovery Findings:</strong> panel ini hanya muncul jika discovery diaktifkan.</li>
       </ul>
     </div>
   </div>
@@ -477,59 +494,18 @@
       <h5 class="mb-0">8) Detail Halaman: Discovery Center</h5>
     </div>
     <div class="card-body">
-      <h6>A. Tujuan</h6>
-      <p>Discovery Center digunakan untuk menemukan asset baru, memperbarui data asset existing, dan menjaga freshness inventory.</p>
-
-      <h6>B. Form "Run New Discovery"</h6>
-      <div class="table-responsive mb-3">
-        <table class="table table-sm table-bordered mb-0">
-          <thead>
-            <tr>
-              <th>Input</th>
-              <th>Wajib</th>
-              <th>Keterangan</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Scope</td>
-              <td>Tidak</td>
-              <td>Label area scan, misal region/domain sistem</td>
-            </tr>
-            <tr>
-              <td>Source Mode</td>
-              <td>Ya</td>
-              <td><code>catalog_sync</code>, <code>manual_seed</code>, atau <code>hybrid</code></td>
-            </tr>
-            <tr>
-              <td>Include legacy catalog</td>
-              <td>Tidak</td>
-              <td>Jika aktif, kandidat diambil dari katalog internal yang tersedia</td>
-            </tr>
-            <tr>
-              <td>Manual Payload</td>
-              <td>Kondisional</td>
-              <td>Wajib isi saat mode <code>manual_seed</code>. Format CSV per baris</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="alert alert-warning mb-3">
+        Discovery Center sedang di-hide sementara, sehingga menu/tombol terkait tidak ditampilkan.
       </div>
-
-      <h6>C. Format Manual Payload (CSV)</h6>
-      <pre class="mb-3"><code>name,type,ip,port,hostname,environment,criticality,owner_email,owner_name,bank_id
-Core Gateway,application,10.10.20.12,443,core-gw-01,production,critical,owner@company.com,Gateway Team,1</code></pre>
-
-      <h6>D. Tombol & Hasil</h6>
+      <h6>A. Dampak ke Operasional</h6>
       <ul>
-        <li><strong>Start Discovery Run:</strong> mulai eksekusi discovery.</li>
-        <li><strong>Open Inventory:</strong> buka hasil inventory setelah run.</li>
-        <li><strong>Detail (di tabel history):</strong> buka detail run per UUID.</li>
+        <li>Onboarding dan pembaruan asset dilakukan manual dari <strong>Asset Inventory</strong>.</li>
+        <li>Route <code>/discovery</code> tetap ada, namun akses akan diarahkan ke dashboard.</li>
+        <li>Panel discovery di Asset Ops/Asset Detail hanya muncul jika fitur diaktifkan kembali.</li>
       </ul>
-
-      <h6>E. Discovery Run Detail</h6>
+      <h6>B. Cara Mengaktifkan Kembali</h6>
       <p class="mb-0">
-        Di halaman detail run Anda bisa melihat konteks run, status, jumlah found/new/updated/matched, dan tabel findings.
-        Gunakan link <strong>Open Asset</strong> pada findings untuk loncat ke detail asset terkait.
+        Ubah nilai environment <code>ASSET_DISCOVERY_ENABLED=true</code> lalu reload aplikasi.
       </p>
     </div>
   </div>
@@ -634,12 +610,12 @@ Core Gateway,application,10.10.20.12,443,core-gw-01,production,critical,owner@co
         <li>Validasi asset muncul di list dan detail.</li>
       </ol>
 
-      <h6>Workflow B: Sinkronisasi via Discovery</h6>
+      <h6>Workflow B: Update Data Manual (Discovery Off)</h6>
       <ol>
-        <li>Buka <strong>Discovery Center</strong>.</li>
-        <li>Set mode (catalog/manual/hybrid) dan payload bila perlu.</li>
-        <li>Klik <strong>Start Discovery Run</strong>.</li>
-        <li>Buka detail run, review findings, lalu verifikasi di inventory.</li>
+        <li>Buka <strong>Asset Inventory</strong>.</li>
+        <li>Cari asset target dengan filter/search.</li>
+        <li>Klik <strong>Edit</strong> lalu simpan perubahan.</li>
+        <li>Verifikasi perubahan di halaman <strong>Asset Detail</strong> dan cek policy jika perlu.</li>
       </ol>
 
       <h6>Workflow C: Menangani Policy Violation</h6>
@@ -652,7 +628,7 @@ Core Gateway,application,10.10.20.12,443,core-gw-01,production,critical,owner@co
 
       <h6>Workflow D: Sensitive Change via Approval</h6>
       <ol>
-        <li>Operator edit asset sensitif (status/criticality/owner/bank).</li>
+        <li>Operator edit asset sensitif (status/owner/bank/tipe server).</li>
         <li>Sistem membuat pending request ke <strong>Approvals</strong>.</li>
         <li>Auditor/Admin/Superadmin review lalu approve/reject.</li>
         <li>Keputusan otomatis tercatat di audit log asset.</li>
@@ -682,8 +658,8 @@ Core Gateway,application,10.10.20.12,443,core-gw-01,production,critical,owner@co
             </tr>
             <tr>
               <td>Tidak bisa run discovery</td>
-              <td>Role bukan superadmin/admin/operator</td>
-              <td>Gunakan akun berizin atau minta perubahan role</td>
+              <td>Fitur discovery sedang di-hide via konfigurasi</td>
+              <td>Gunakan alur input manual atau aktifkan <code>ASSET_DISCOVERY_ENABLED=true</code></td>
             </tr>
             <tr>
               <td>Tidak bisa approve request sendiri</td>

@@ -85,9 +85,13 @@ class AssetOpsController extends Controller
             ->whereNotNull('last_seen_at')
             ->count();
 
-        $discoveredAssets = (clone $assetsBase)
-            ->whereIn('source', ['discovery', 'catalog_sync', 'sync', 'manual_seed'])
+        $importedAssets = (clone $assetsBase)
+            ->where('source', 'import')
             ->count();
+
+        $eolNotification = $this->buildEolNotificationSummary(
+            (clone $assetsBase)->select(['id', 'asset_code', 'name', 'asset_type', 'status', 'os_eol_date', 'asset_profile'])->get()
+        );
 
         $violationsQuery = AssetPolicyViolation::where('status', 'open');
         if (!$user->hasGlobalAssetVisibility()) {
@@ -102,7 +106,7 @@ class AssetOpsController extends Controller
         $coverage = [
             'owner' => $totalAssets > 0 ? round(($withOwner / $totalAssets) * 100) : 0,
             'visibility' => $totalAssets > 0 ? round(($withLastSeen / $totalAssets) * 100) : 0,
-            'discovery' => $totalAssets > 0 ? round(($discoveredAssets / $totalAssets) * 100) : 0,
+            'import' => $totalAssets > 0 ? round(($importedAssets / $totalAssets) * 100) : 0,
         ];
 
         $metrics = [
@@ -119,12 +123,104 @@ class AssetOpsController extends Controller
         return view('assets.dashboard', compact(
             'metrics',
             'coverage',
+            'eolNotification',
             'assetsByType',
             'assetsByStatus',
             'recentAssets',
             'topRiskAssets',
             'recentRuns'
         ));
+    }
+
+    /**
+     * Build compact EOL notification summary for dashboard.
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Asset>  $assets
+     * @return array<string, int>
+     */
+    private function buildEolNotificationSummary($assets)
+    {
+        $summary = [
+            'os_expired' => 0,
+            'os_near' => 0,
+            'license_expired' => 0,
+            'license_near' => 0,
+            'total' => 0,
+        ];
+
+        foreach ($assets as $asset) {
+            if (($asset->status ?? null) === 'retired') {
+                continue;
+            }
+
+            $osDays = $this->daysUntilDate($asset->os_eol_date ?? null);
+            if ($osDays !== null && $osDays <= 90) {
+                $summary[$osDays < 0 ? 'os_expired' : 'os_near']++;
+                $summary['total']++;
+            }
+
+            $profile = is_array($asset->asset_profile) ? $asset->asset_profile : [];
+            $licenseEol = $this->databaseLicenseEolDate($asset->asset_type ?? null, $profile);
+            $licenseDays = $this->daysUntilDate($licenseEol);
+            if ($licenseDays !== null && $licenseDays <= 90) {
+                $summary[$licenseDays < 0 ? 'license_expired' : 'license_near']++;
+                $summary['total']++;
+            }
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Parse database license EOL date from asset profile.
+     *
+     * @param  string|null  $assetType
+     * @param  array<string, mixed>  $assetProfile
+     * @return string|null
+     */
+    private function databaseLicenseEolDate($assetType, array $assetProfile)
+    {
+        if (!in_array($assetType, ['database_server', 'database'], true)) {
+            return null;
+        }
+
+        return $this->normalizeDate($assetProfile['db_license_eol_date'] ?? null);
+    }
+
+    /**
+     * Normalize date input to Y-m-d.
+     *
+     * @param  mixed  $value
+     * @return string|null
+     */
+    private function normalizeDate($value)
+    {
+        if (!$value) {
+            return null;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            $value = $value->format('Y-m-d');
+        }
+
+        $parsed = strtotime((string) $value);
+        return $parsed ? date('Y-m-d', $parsed) : null;
+    }
+
+    /**
+     * Calculate days until given date (negative means expired).
+     *
+     * @param  mixed  $dateValue
+     * @return int|null
+     */
+    private function daysUntilDate($dateValue)
+    {
+        $normalized = $this->normalizeDate($dateValue);
+        if (!$normalized) {
+            return null;
+        }
+
+        return now()->startOfDay()->diffInDays($normalized, false);
     }
 
     /**
