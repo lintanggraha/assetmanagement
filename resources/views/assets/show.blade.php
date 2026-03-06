@@ -246,9 +246,6 @@
         </div>
         <div class="card-body d-grid gap-2">
           <a href="{{ route('assets.index') }}" class="btn btn-outline-secondary btn-sm">Back to Inventory</a>
-          @if(Auth::user()->canRunDiscovery())
-            <a href="{{ route('discovery.index') }}" class="btn btn-outline-primary btn-sm">Open Discovery Center</a>
-          @endif
         </div>
       </div>
     </div>
@@ -555,46 +552,6 @@
       </div>
     </div>
 
-    @if(Auth::user()->canRunDiscovery())
-      <div class="col-12 col-lg-6">
-        <div class="card h-100">
-          <div class="card-header">
-            <h5 class="mb-0">Latest Discovery Findings</h5>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-sm mb-0">
-              <thead>
-                <tr>
-                  <th>Run</th>
-                  <th>Status</th>
-                  <th>Confidence</th>
-                  <th>Captured At</th>
-                </tr>
-              </thead>
-              <tbody>
-                @forelse($latestFindings as $finding)
-                  @php
-                    $findingClass = $finding->finding_status === 'new' ? 'success' : ($finding->finding_status === 'updated' ? 'warning' : 'secondary');
-                  @endphp
-                  <tr>
-                    <td>
-                      <a href="{{ route('discovery.show', $finding->run_id) }}">{{ substr(optional($finding->run)->run_uuid, 0, 8) }}</a>
-                    </td>
-                    <td><span class="badge bg-label-{{ $findingClass }}">{{ $finding->finding_status }}</span></td>
-                    <td>{{ $finding->confidence }}%</td>
-                    <td>{{ $finding->created_at->format('Y-m-d H:i') }}</td>
-                  </tr>
-                @empty
-                  <tr>
-                    <td colspan="4" class="text-center text-muted py-3">No discovery findings yet.</td>
-                  </tr>
-                @endforelse
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    @endif
   </div>
 </section>
 @endsection

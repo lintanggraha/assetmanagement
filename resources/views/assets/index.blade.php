@@ -94,11 +94,6 @@
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
       <h5 class="mb-0">Filter Inventory</h5>
       <div class="d-flex gap-2">
-        @if(Auth::user()->canRunDiscovery())
-          <a href="{{ route('discovery.index') }}" class="btn btn-outline-primary btn-sm">
-            <i class="fa fa-crosshairs"></i> Discovery Center
-          </a>
-        @endif
         <a href="{{ route('policies.index') }}" class="btn btn-outline-secondary btn-sm">
           <i class="fa fa-shield"></i> Policies
         </a>

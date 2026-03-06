@@ -4,7 +4,7 @@
 <section class="content-header">
   <h1>
     ASSET OPS CENTER
-    <small>Asset Discovery and Management Control Plane</small>
+    <small>Asset Management Control Plane</small>
   </h1>
   <ol class="breadcrumb">
     <li><a href="{{ route('dashboard') }}"><i class="fa fa-home"></i> Home</a></li>
@@ -32,11 +32,6 @@
       @if(Auth::user()->canManageAssetRecords())
         <a href="{{ route('assets.create') }}" class="btn btn-primary btn-sm">
           <i class="fa fa-plus"></i> Add Asset
-        </a>
-      @endif
-      @if(Auth::user()->canRunDiscovery())
-        <a href="{{ route('discovery.index') }}" class="btn btn-outline-primary btn-sm">
-          <i class="fa fa-crosshairs"></i> Run Discovery
         </a>
       @endif
       <a href="{{ route('policies.index') }}" class="btn btn-outline-secondary btn-sm">
@@ -202,13 +197,8 @@
     </div>
   </div>
 
-  @php
-    $showDiscoveryPanels = Auth::user()->canRunDiscovery();
-    $topRiskColClass = $showDiscoveryPanels ? 'col-12 col-lg-7' : 'col-12';
-  @endphp
-
   <div class="row g-3">
-    <div class="{{ $topRiskColClass }}">
+    <div class="col-12">
       <div class="card">
         <div class="card-header">
           <h5 class="mb-0">Top Risk Assets</h5>
@@ -246,50 +236,6 @@
         </div>
       </div>
     </div>
-
-    @if($showDiscoveryPanels)
-      <div class="col-12 col-lg-5">
-        <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Recent Discovery Runs</h5>
-            <a href="{{ route('discovery.index') }}" class="btn btn-sm btn-outline-primary">View All</a>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-sm mb-0">
-              <thead>
-                <tr>
-                  <th>Run</th>
-                  <th>Status</th>
-                  <th>Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                @forelse($recentRuns as $run)
-                  @php
-                    $statusClass = $run->status === 'completed' ? 'success' : ($run->status === 'failed' ? 'danger' : 'warning');
-                  @endphp
-                  <tr>
-                    <td>
-                      <a href="{{ route('discovery.show', $run->id) }}" class="fw-semibold">{{ substr($run->run_uuid, 0, 8) }}</a>
-                      <small class="d-block text-muted">{{ optional($run->started_at)->format('Y-m-d H:i') }}</small>
-                    </td>
-                    <td><span class="badge bg-label-{{ $statusClass }} text-capitalize">{{ $run->status }}</span></td>
-                    <td>
-                      <small class="d-block">New: {{ $run->total_new }}</small>
-                      <small class="d-block">Updated: {{ $run->total_updated }}</small>
-                    </td>
-                  </tr>
-                @empty
-                  <tr>
-                    <td colspan="3" class="text-center text-muted py-4">Belum ada discovery run.</td>
-                  </tr>
-                @endforelse
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    @endif
   </div>
 </section>
 @endsection

@@ -1,43 +1,70 @@
 # Asset Management System
 
-Aplikasi web untuk inventarisasi aset TI, discovery aset, kontrol perubahan berbasis approval, dan monitoring pelanggaran policy.
+Aplikasi web untuk inventarisasi aset TI (CMDB-lite), governance perubahan, dan monitoring compliance.
 
-Repository ini dibangun dengan Laravel dan digunakan untuk mengelola siklus hidup aset (aplikasi, database, server, network, storage, endpoint) dalam satu dashboard operasional.
+## Status Fitur Saat Ini
 
-## Highlights
-
-- Dashboard operasional aset dengan metrik risiko, stale visibility, coverage, dan ringkasan discovery.
-- Asset Inventory lengkap: filter/search, detail aset, activity log, dan history discovery.
-- Discovery Center:
-  - Sinkronisasi otomatis dari katalog legacy (`aplikasi` dan `database`).
-  - Ingest manual via payload CSV-like.
-  - Mode `catalog_sync`, `manual_seed`, dan `hybrid`.
-- Approval workflow untuk perubahan sensitif aset (`approve/reject`).
-- Policy Violation Center dengan scanner otomatis dan resolve manual.
-- Manajemen user + role + status aktif/nonaktif.
-- Role-based access control (`superadmin`, `admin`, `auditor`, `operator`, `viewer`).
+- Discovery Center disembunyikan dari tombol/menu UI.
+- Input dan update aset difokuskan ke form manual di Asset Inventory.
+- Field `source` dibatasi menjadi `manual` dan `import`.
+- `criticality` dihitung otomatis dari EOL terdekat (OS dan/atau license DB).
+- Notifikasi EOL tampil di Asset Ops Center, Asset Inventory, dan Asset Detail.
 
 ## Modul Utama
 
 | Modul | Endpoint | Fungsi |
 |---|---|---|
-| Dashboard | `/dashboard` | Ringkasan posture aset dan risiko |
+| Dashboard | `/dashboard` | Ringkasan operasional aset, risiko, dan notifikasi EOL |
 | Asset Inventory | `/asset-inventory` | CRUD aset, filter, detail, retire |
-| Discovery Center | `/discovery` | Menjalankan dan melihat hasil discovery |
-| Approvals | `/approvals` | Approve/reject request perubahan aset |
-| Asset Policies | `/asset-policies` | Lihat pelanggaran policy dan resolve |
-| User Management | `/users` | Kelola role dan status user |
-| User Guide | `/user-guide` | Panduan penggunaan aplikasi |
+| Approvals | `/approvals` | Approve/reject perubahan sensitif |
+| Asset Policies | `/asset-policies` | Monitoring violation dan resolve |
+| User Management | `/users` | Kelola user, role, status |
+| User Guide | `/user-guide` | Panduan operasional aplikasi |
+| Discovery (hidden) | `/discovery` | Route tetap ada, tetapi tidak ditampilkan di UI |
+
+## Cakupan Data Aset
+
+Asset type yang dipakai:
+
+- `application`
+- `application_server`
+- `database_server`
+- `network_peripheral`
+- `etc`
+
+Contoh data penting per aset:
+
+- Metadata umum: name, environment, status, lifecycle, owner, tags.
+- Server: host type, OS, OS version, OS EOL.
+- Database server: license type (`enterprise/community`), license EOL.
+- Application server: hosted services/applications.
+
+## Aturan Auto Criticality (Berbasis EOL)
+
+- `critical`: EOL sudah lewat (expired)
+- `high`: EOL <= 30 hari
+- `medium`: EOL <= 90 hari
+- `low`: EOL > 90 hari
+- fallback `medium` jika data EOL belum tersedia
+
+## Notifikasi EOL
+
+Sistem memberi notifikasi untuk:
+
+- OS EOL expired
+- OS EOL <= 90 hari
+- License EOL expired (database server)
+- License EOL <= 90 hari (database server)
 
 ## Role Matrix
 
-| Role | Visibility | Manage Asset | Run Discovery | Approve Changes | Manage Users |
-|---|---|---|---|---|---|
-| superadmin | Global | Ya | Ya | Ya | Ya |
-| admin | Global | Ya | Ya | Ya | Ya |
-| auditor | Global | Tidak | Tidak | Ya | Tidak |
-| operator | Own Scope | Ya | Ya | Tidak | Tidak |
-| viewer | Own Scope | Tidak | Tidak | Tidak | Tidak |
+| Role | Visibility | Manage Asset | Approve Changes | Manage Users |
+|---|---|---|---|---|
+| superadmin | Global | Ya | Ya | Ya |
+| admin | Global | Ya | Ya | Ya |
+| auditor | Global | Tidak | Ya | Tidak |
+| operator | Own Scope | Ya | Tidak | Tidak |
+| viewer | Own Scope | Tidak | Tidak | Tidak |
 
 ## Tech Stack
 
@@ -45,14 +72,7 @@ Repository ini dibangun dengan Laravel dan digunakan untuk mengelola siklus hidu
 - Laravel `^12`
 - MySQL/MariaDB
 - Blade + Bootstrap/Sneat assets
-- Vite (frontend build)
-
-## Prasyarat
-
-- PHP 8.2+
-- Composer
-- Node.js + npm
-- MySQL/MariaDB
+- Vite
 
 ## Instalasi Lokal
 
@@ -63,11 +83,25 @@ composer install
 npm install
 cp .env.example .env
 php artisan key:generate
+php artisan migrate
 ```
 
-### Konfigurasi `.env`
+Opsional seed role awal:
 
-Set minimal parameter berikut:
+```sql
+UPDATE users SET role = 'superadmin', is_active = 1 WHERE id = 1;
+```
+
+Jalankan aplikasi:
+
+```bash
+php artisan serve
+npm run dev
+```
+
+## Konfigurasi `.env`
+
+Set minimal:
 
 ```env
 APP_NAME="Asset Management System"
@@ -81,74 +115,29 @@ DB_USERNAME=root
 DB_PASSWORD=
 ```
 
-### Inisialisasi Database
+Jika ingin mengaktifkan discovery kembali dari sisi controller, set:
 
-```bash
-php artisan migrate
+```env
+ASSET_DISCOVERY_ENABLED=true
 ```
 
-Jika diperlukan, atur role user awal secara manual:
+## Scheduler & Command
 
-```sql
-UPDATE users SET role = 'superadmin', is_active = 1 WHERE id = 1;
-```
+Scheduler saat ini:
 
-### Jalankan Aplikasi
-
-```bash
-php artisan serve
-npm run dev
-```
-
-## Scheduler & Automation
-
-Kernel menjadwalkan:
-
-- `asset:discover-scheduled` setiap hari jam `02:00`
+- `asset:discover-scheduled` harian jam `02:00` (backend command tetap ada)
 - `asset:scan-policies` setiap jam
-
-Tambahkan cron (Linux):
-
-```bash
-* * * * * php /path/to/project/artisan schedule:run >> /dev/null 2>&1
-```
 
 Manual run:
 
 ```bash
 php artisan asset:discover-scheduled
 php artisan asset:scan-policies
-```
-
-## Format Manual Discovery Payload
-
-Mode `manual_seed`/`hybrid` menerima baris CSV dengan urutan:
-
-```text
-name,asset_type,ip_address,port,hostname,environment,criticality,owner_email,owner_name,bank_id
-```
-
-Contoh:
-
-```text
-Core API,application,10.10.10.15,443,core-api.prod,production,high,owner@company.com,Platform Team,1
-Payment DB,database,10.10.20.12,5432,payment-db.prod,production,critical,dba@company.com,DBA Team,2
-```
-
-## Command Penting
-
-```bash
-php artisan route:list
 php artisan test
-php artisan optimize:clear
 ```
 
 ## Catatan
 
 - Semua route utama diproteksi middleware `auth` + `active`.
-- Akses endpoint sensitif menggunakan middleware `role`.
-- Scanner policy menandai otomatis `open/resolved` violation berdasarkan kondisi aset terbaru.
-
-## License
-
-Project ini mengikuti lisensi framework Laravel (MIT), kecuali jika ada kebijakan internal lain di organisasi.
+- Perubahan sensitif diproses melalui approval queue.
+- Pelanggaran policy disinkronkan otomatis (`open`/`resolved`) berdasarkan kondisi aset terbaru.

@@ -2,7 +2,6 @@
   $isAssetOps = request()->path() === '/' || request()->is('dashboard');
   $isGuide = request()->is('user-guide');
   $isAssetInventory = request()->is('asset-inventory*');
-  $isDiscovery = request()->is('discovery*');
   $isPolicies = request()->is('asset-policies*');
   $isApprovals = request()->is('approvals*');
   $isUsers = request()->is('users*');
@@ -58,15 +57,6 @@
         <div class="text-truncate">Asset Inventory</div>
       </a>
     </li>
-
-    @if($user && $user->canRunDiscovery())
-      <li class="menu-item {{ $isDiscovery ? 'active' : '' }}">
-        <a href="{{ route('discovery.index') }}" class="menu-link">
-          <i class="menu-icon tf-icons bx bx-radar"></i>
-          <div class="text-truncate">Discovery Center</div>
-        </a>
-      </li>
-    @endif
 
     <li class="menu-item {{ $isPolicies ? 'active' : '' }}">
       <a href="{{ route('policies.index') }}" class="menu-link">
